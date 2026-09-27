@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMWIGET</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .custom-scroll::-webkit-scrollbar { height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+        .marquee-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .marquee-track-container {
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+        }
+        
+        .fade-edges-small { -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); }
+        .fade-edges-medium { -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent); mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent); }
+        .fade-edges-large { -webkit-mask-image: linear-gradient(to right, transparent, black 25%, black 75%, transparent); mask-image: linear-gradient(to right, transparent, black 25%, black 75%, transparent); }
+
+        .marquee-content {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+            /* Аппаратное ускорение для устранения дерганий в OBS / Live Studio */
+            will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translate3d(0, 0, 0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            -webkit-perspective: 1000;
+            perspective: 1000;
+        }
+
+        @keyframes marquee-left { 
+            0% { transform: translate3d(0, 0, 0); } 
+            100% { transform: translate3d(-100%, 0, 0); } 
+        }
+        @keyframes marquee-right { 
+            0% { transform: translate3d(-100%, 0, 0); } 
+            100% { transform: translate3d(0, 0, 0); } 
+        }
+
+        .slideshow-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .slideshow-slide {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0;
+            z-index: 0;
+            padding: 10px;
+        }
+
+        .trans-fade { transition: opacity 1s ease-in-out; }
+        .trans-fade.active { opacity: 1; z-index: 1; }
+        
+        .trans-slide-left { transform: translateX(100%); transition: all 1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .trans-slide-left.active { opacity: 1; transform: translateX(0); z-index: 1; }
+        .trans-slide-right { transform: translateX(-100%); transition: all 1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .trans-slide-right.active { opacity: 1; transform: translateX(0); z-index: 1; }
+
+        .trans-zoom-in { transform: scale(0.5); opacity: 0; transition: all 1.2s ease; }
+        .trans-zoom-in.active { opacity: 1; transform: scale(1); z-index: 1; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+
+        body.is-obs-mode {
+            background-color: transparent !important;
+        }
+
+        .checkerboard-bg {
+            background-image: 
+                linear-gradient(45deg, #1e293b 25%, transparent 25%), 
+                linear-gradient(-45deg, #1e293b 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #1e293b 75%), 
+                linear-gradient(-45deg, transparent 75%, #1e293b 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: #334155; border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 16px; width: 16px; border-radius: 50%;
+            background: #3b82f6; cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -5px;
+            box-shadow: 0 0 10px rgba(59,130,246,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        #mascot-container {
+            position: fixed;
+            bottom: 20px;
+            left: 30px;
+            z-index: 9999;
+            pointer-events: auto;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #mascot-img {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        #mascot-container:hover #mascot-img { transform: scale(1.1) rotate(5deg); }
+        
+        #mascot-video {
+            width: 160px;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(59,130,246,0.5);
+            display: none;
+            pointer-events: none;
+            flex-shrink: 0;
+        }
+        
+        .speech-bubble {
+            position: absolute;
+            top: -40px;
+            right: -20px;
+            background: white;
+            color: black;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 20px;
+            width: 0; height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid white;
+        }
+        .speech-bubble.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 selection:bg-blue-500/30">
+
+    <div id="obs-view" class="w-screen h-screen bg-transparent overflow-hidden hidden absolute top-0 left-0">
+        <div id="widget-renderer" class="w-full h-full"></div>
+    </div>
+
+    <div id="app-container" class="min-h-screen flex flex-col hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
+        
+        <nav class="bg-slate-900/50 backdrop-blur-md border-b border-white/5 p-3 sm:p-4 sticky top-0 z-10 shadow-lg">
+            <div class="max-w-7xl mx-auto flex justify-between items-center gap-2">
+                <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-blue-600/20 text-blue-500 rounded-xl flex items-center justify-center border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 sm:w-6 sm:h-6 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]">
+                            <path fill-rule="evenodd" d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white hidden min-[400px]:block">IMWIGET</h1>
+                </div>
+                
+                <div class="flex items-center gap-2 sm:gap-4 min-w-0">
+                    <span id="user-display" class="flex items-center text-xs sm:text-sm font-medium text-slate-300 bg-slate-800/50 px-2 sm:px-3 py-1.5 rounded-full border border-white/5 max-w-[140px] sm:max-w-xs overflow-hidden"></span>
+                    <button id="btn-logout" onclick="handleLogout()" class="bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hidden flex items-center gap-2 flex-shrink-0">
+                        <i class="fas fa-sign-out-alt"></i><span class="hidden sm:inline">Выйти</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-6">
+            
+            <div class="w-full lg:w-1/3 flex flex-col gap-4 flex-shrink-0">
+                <div class="bg-slate-900/60 backdrop-blur-md border border-white/5 p-5 rounded-2xl flex justify-between items-center shadow-xl">
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Виджеты</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Оверлеи для стрима</p>
+                    </div>
+                    <button onclick="showCreateModal()" class="bg-blue-600 hover:bg-blue-500 hover:scale-105 active:scale-95 text-white w-10 h-10 rounded-xl transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)] flex items-center justify-center">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                
+                <div id="widgets-list" class="flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-220px)] custom-scroll pr-1 pb-4">
+                    <div class="text-center text-slate-500 py-8 bg-slate-900/30 rounded-2xl border border-white/5 border-dashed">Загрузка...</div>
+                </div>
+            </div>
+
+            <div class="w-full lg:flex-grow bg-slate-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-6 hidden flex-col shadow-xl relative" id="editor-panel">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-700/50 pb-5 gap-4">
+                    <div>
+                        <h2 id="editor-title" class="text-2xl font-bold text-white tracking-tight">Редактор</h2>
+                        <p class="text-slate-400 text-sm mt-1">Настройте внешний вид</p>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto">
+                         <button onclick="copyObsUrl()" class="flex-1 md:flex-none justify-center bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm font-medium">
+                            <i class="fas fa-link text-blue-400"></i> Ссылка
+                        </button>
+                        <button onclick="saveWidget()" class="flex-1 md:flex-none justify-center bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all flex items-center gap-2 text-sm font-medium">
+                            <i class="fas fa-save"></i> Сохранить
+                        </button>
+                    </div>
+                </div>
+
+                <div id="editor-layout" class="flex flex-col gap-6">
+                    
+                    <div id="preview-wrapper" class="w-full flex-shrink-0">
+                        <div class="flex justify-between items-end mb-3">
+                            <h3 id="obs-hint-text" class="text-xs font-bold text-slate-400 uppercase tracking-wider">Предпросмотр <span class="lowercase text-[10px] text-blue-400 bg-blue-900/20 px-2 py-0.5 rounded font-mono">(Холст OBS: Ширина 800px, Высота 600px)</span></h3>
+                        </div>
+                        
+                        <div id="preview-bounds" class="bg-slate-950 border border-slate-800 rounded-xl w-full relative overflow-hidden checkerboard-bg shadow-inner transition-all duration-300">
+                            <div id="preview-container" class="absolute top-0 left-0 origin-top-left" style="width: 800px; height: 600px;"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="settings-form-wrapper" class="w-full flex-grow">
+                        <div id="settings-form" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+                    </div>
+                </div>
+
+                <div class="mt-auto pt-8 flex justify-end">
+                    <button onclick="deleteCurrentWidget()" class="text-red-400 hover:text-red-300 hover:bg-red-400/10 px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2">
+                        <i class="fas fa-trash-alt"></i> Удалить виджет
+                    </button>
+                </div>
+            </div>
+            
+            <div id="empty-state" class="w-full lg:flex-grow bg-slate-900/30 border border-white/5 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-lg border border-slate-700">
+                    <i class="fas fa-magic text-3xl text-blue-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">Выбери или создай виджет</h3>
+                <p class="text-slate-400 max-w-sm">Начни с создания нового виджета слева.</p>
+            </div>
+        </main>
+    </div>
+
+    <div id="auth-modal" class="modal px-4">
+        <div class="bg-slate-900 border border-slate-700 p-6 md:p-8 rounded-2xl w-full max-w-md shadow-[0_20px_50px_rgba(0,0,0,0.5)] transform transition-all relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+            <div class="text-center mb-6 mt-2">
+                <div class="w-16 h-16 bg-blue-500/10 text-blue-500 rounded-2xl mx-auto flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]"><path fill-rule="evenodd" d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" clip-rule="evenodd" /></svg>
+                </div>
+                <h2 class="text-2xl font-bold text-white">IMWIGET</h2>
+            </div>
+            <div class="flex p-1 bg-slate-950/50 rounded-xl mb-6 border border-slate-800 relative">
+                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 bg-slate-800 text-white shadow shadow-black/20">Вход</button>
+                <button id="tab-signup" onclick="switchAuthTab('signup')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white">Регистрация</button>
+            </div>
+            <div id="auth-error" class="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg hidden text-center mb-4"></div>
+            <div id="form-login" class="space-y-5 block">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+                    <input type="email" id="login-email" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-4 py-3 outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Пароль</label>
+                    <input type="password" id="login-password" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-4 py-3 outline-none transition-all">
+                </div>
+                <div class="pt-2">
+                    <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-semibold transition-all">Войти</button>
+                </div>
+            </div>
+            <div id="form-signup" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+                    <input type="email" id="signup-email" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 text-white rounded-xl px-4 py-2.5 outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Пароль</label>
+                    <input type="password" id="signup-password" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 text-white rounded-xl px-4 py-2.5 outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Повторите пароль</label>
+                    <input type="password" id="signup-password-confirm" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 text-white rounded-xl px-4 py-2.5 outline-none transition-all">
+                </div>
+                <div class="pt-2">
+                    <button onclick="handleSignup()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-semibold transition-all">Создать аккаунт</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="create-modal" class="modal px-4">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+            <h2 class="text-xl font-bold text-white mb-5">Новый виджет</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Название</label>
+                    <input type="text" id="new-widget-name" maxlength="30" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 text-white rounded-xl px-4 py-2.5 outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Тип виджета</label>
+                    <select id="new-widget-type" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 text-white rounded-xl px-4 py-2.5 outline-none transition-all cursor-pointer">
+                        <option value="image-marquee">Бегущая строка (Фото + Подарки)</option>
+                        <option value="multi-slideshow">Слайдшоу (Фото + Подарки)</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 mt-8">
+                    <button onclick="closeModal('create-modal')" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-2.5 rounded-xl transition-all font-medium">Отмена</button>
+                    <button onclick="createWidget()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl transition-all font-semibold">Создать</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="msg-modal" class="modal z-[100] px-4">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm text-center shadow-2xl">
+            <i id="msg-icon" class="fas fa-info-circle text-4xl mb-4 text-blue-500"></i>
+            <h3 id="msg-title" class="text-xl font-bold text-white mb-2">Message</h3>
+            <p id="msg-text" class="text-slate-400 mb-6 text-sm"></p>
+            <button onclick="closeModal('msg-modal')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-2.5 px-8 rounded-xl transition-all font-medium w-full">Понятно</button>
+        </div>
+    </div>
+
+    <div id="gift-selector-modal" class="modal z-[60] px-4">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl relative">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-white">Выбор подарка</h2>
+                <button onclick="closeModal('gift-selector-modal')" class="text-slate-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div id="gift-library-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 overflow-y-auto custom-scroll pr-2 flex-grow min-h-[200px]">
+                <div class="col-span-full text-center text-slate-500 mt-10"><i class="fas fa-circle-notch fa-spin mr-2"></i> Загрузка подарков...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="item-editor-modal" class="modal z-[70] px-4">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-5xl flex flex-col md:flex-row gap-6 shadow-2xl relative">
+            <div class="flex-1 space-y-4 overflow-y-auto custom-scroll max-h-[70vh] pr-2">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-xl font-bold text-white">Настройка элемента</h2>
+                    <button onclick="closeItemEditor()" class="text-slate-400 hover:text-white md:hidden"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                
+                <input type="hidden" id="ie-rowIndex">
+                <input type="hidden" id="ie-itemIndex">
+
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-4">
+                    <h3 class="text-sm font-bold text-indigo-400 mb-3"><i class="fas fa-image mr-1.5"></i>Настройки изображения</h3>
+                    
+                    <div class="mb-4">
+                        <div class="flex justify-between items-end mb-2">
+                            <label class="block text-xs font-semibold text-slate-300">Свой размер (Высота)</label>
+                            <span id="val-ie-size" class="text-xs font-mono text-indigo-400 font-bold bg-indigo-900/30 px-2 py-0.5 rounded">Глобальный</span>
+                        </div>
+                        <input type="range" id="ie-itemHeight" min="0" max="500" value="0" step="10" oninput="document.getElementById('val-ie-size').textContent = this.value == 0 ? 'Глобальный' : this.value + 'px'; updateItemLivePreview()">
+                        <p class="text-[10px] text-slate-500 mt-1">Установите 0, чтобы использовать общий размер строки.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Эффект под элементом</label>
+                            <select id="ie-itemGlow" class="w-full bg-slate-950/50 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none" onchange="updateItemLivePreview()">
+                                <option value="none">Нет</option>
+                                <option value="shadow">Тень (Shadow)</option>
+                                <option value="glow">Свечение (Glow)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Цвет эффекта</label>
+                            <input type="color" id="ie-itemGlowColor" value="#3b82f6" class="h-9 w-full cursor-pointer bg-slate-950/50 border border-slate-700 rounded-lg" oninput="updateItemLivePreview()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <h3 class="text-sm font-bold text-blue-400 mb-3"><i class="fas fa-font mr-1.5"></i>Настройки текста</h3>
+                    
+                    <div class="mb-3">
+                        <label class="block text-xs font-semibold text-slate-400 mb-1.5">Текст (можно в несколько строк)</label>
+                        <textarea id="ie-text" rows="3" class="w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 text-white rounded-lg px-3 py-2 text-sm outline-none resize-none" oninput="updateItemLivePreview()"></textarea>
+                        <p id="ie-text-hint" class="text-[10px] text-slate-500 mt-1">Оставьте пустым, если текст не нужен.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Размер текста</label>
+                                <span id="val-ie-font" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">24px</span>
+                            </div>
+                            <input type="range" id="ie-fontSize" min="10" max="150" value="24" oninput="document.getElementById('val-ie-font').textContent = this.value + 'px'; updateItemLivePreview()">
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Отступ текста</label>
+                                <span id="val-ie-offset" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">0px</span>
+                            </div>
+                            <input type="range" id="ie-offset" min="-150" max="150" value="0" oninput="document.getElementById('val-ie-offset').textContent = this.value + 'px'; updateItemLivePreview()">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Положение</label>
+                            <select id="ie-position" class="w-full bg-slate-950/50 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none" onchange="updateItemLivePreview()">
+                                <option value="bottom">Под картинкой</option>
+                                <option value="top">Над картинкой</option>
+                                <option value="center">По центру (поверх)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Эффект текста</label>
+                            <select id="ie-effect" class="w-full bg-slate-950/50 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none" onchange="updateItemLivePreview()">
+                                <option value="none">Без эффекта</option>
+                                <option value="glow">Свечение</option>
+                                <option value="shadow">Тень</option>
+                                <option value="outline">Идеальная обводка</option>
+                                <option value="glow-outline">Обводка + Свечение</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Толщина эффекта текста</label>
+                                <span id="val-ie-width" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">2px</span>
+                            </div>
+                            <input type="range" id="ie-effectWidth" min="1" max="15" value="2" oninput="document.getElementById('val-ie-width').textContent = this.value + 'px'; updateItemLivePreview()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Цвет эффекта текста</label>
+                            <div class="flex gap-2">
+                                <input type="color" id="ie-effectColor" value="#000000" class="h-10 w-full cursor-pointer bg-slate-950/50 border border-slate-700 rounded-lg" oninput="updateItemLivePreview()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="pt-4 border-t border-slate-700 flex gap-3">
+                    <button onclick="saveItemEdit()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-semibold text-sm">Сохранить</button>
+                    <button onclick="closeItemEditor()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-2.5 rounded-xl text-sm">Отмена</button>
+                </div>
+            </div>
+
+            <div class="w-full md:w-[450px] flex-shrink-0 flex flex-col gap-2">
+                <button onclick="closeItemEditor()" class="hidden md:block absolute top-4 right-4 text-slate-400 hover:text-white z-10"><i class="fas fa-times text-xl"></i></button>
+                <label class="block text-xs font-bold text-slate-400 uppercase text-center mt-2">Реальный масштаб</label>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl h-[450px] w-full flex items-center justify-center checkerboard-bg overflow-hidden relative shadow-inner">
+                    <div id="ie-live-preview-container"></div>
+                </div>
+                <p class="text-[10px] text-slate-500 text-center mt-1">Размер зависит от ползунка или высоты строки</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="mascot-wrapper"></div>
+
+    <script>
+        var SUPABASE_URL = 'https://lqjagftaeejdufwwvjwd.supabase.co';
+        var SUPABASE_KEY = 'sb_publishable_6-9IBhMX9CMVbIackZAJ9g_UUk5FDqx';
+        var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        var currentUser = null;
+        var widgets = [];
+        var currentWidget = null;
+        var previewInterval = null;
+        var previewIntervals = []; 
+        var debounceTimer = null;
+        var loadedFonts = new Set();
+        var globalGifts = [];
+        
+        const inputClass = "w-full bg-slate-950/50 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 text-white rounded-lg px-3 py-2 text-sm outline-none transition-all";
+        const labelClass = "block text-xs font-medium text-slate-400 mb-1.5";
+
+        const GOOGLE_FONTS = [
+            "Inter", "Roboto", "Open Sans", "Montserrat", "Lato", "Oswald", "Raleway", 
+            "Nunito", "Rubik", "Ubuntu", "Playfair Display", "Caveat", "Pacifico", 
+            "Comfortaa", "Jura", "Russo One", "Lobster", "Amatic SC", "Bebas Neue"
+        ];
+
+        var DEFAULT_CONFIGS = {
+            'image-marquee': {
+                fontFamily: 'Inter', color: '#ffffff', gap: 20, imageHeight: 150, edgeFade: 'medium',
+                rows: [{ id: Date.now().toString(), speed: 5, direction: 'left', items: [] }]
+            },
+            'multi-slideshow': {
+                fontFamily: 'Inter', color: '#ffffff', delay: 5, transition: 'fade', layout: 'column', rowHeight: 320, gap: 20,
+                rows: [{ id: Date.now().toString(), items: [] }]
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const obsWidgetId = urlParams.get('widgetId');
+
+            if (obsWidgetId) {
+                document.body.classList.add('is-obs-mode');
+                document.getElementById('obs-view').style.display = 'block';
+                document.getElementById('app-container').style.display = 'none';
+                loadGiftsFromDB().then(() => loadWidgetForOBS(obsWidgetId));
+            } else {
+                document.getElementById('obs-view').style.display = 'none';
+                document.getElementById('app-container').classList.remove('hidden');
+                checkAuth();
+                loadGiftsFromDB();
+                initMascot();
+            }
+            window.addEventListener('resize', resizePreview);
+        });
+
+        function initMascot() {
+            if (window.location.search.includes('widgetId')) return;
+
+            const wrapper = document.getElementById('mascot-wrapper');
+            wrapper.innerHTML = `
+                <div id="mascot-container">
+                    <img id="mascot-img" src="Gemini_Generated_Image_hdls1shdls1shdls-Photoroom.png" alt="Mascot">
+                    <video id="mascot-video" src="video_2026-08-08_05-21-29.mp4" playsinline disablePictureInPicture></video>
+                    <div id="mascot-bubble" class="speech-bubble">Нажми на меня!</div>
+                </div>
+            `;
+            
+            const mascot = document.getElementById('mascot-container');
+            const img = document.getElementById('mascot-img');
+            const video = document.getElementById('mascot-video');
+            const bubble = document.getElementById('mascot-bubble');
+            
+            let isVideoPlaying = false;
+
+            setInterval(() => {
+                if(!isVideoPlaying && Math.random() > 0.5) {
+                    bubble.classList.add('show');
+                    setTimeout(() => bubble.classList.remove('show'), 3000);
+                }
+            }, 6000);
+
+            mascot.addEventListener('click', () => {
+                if(isVideoPlaying) return;
+                isVideoPlaying = true;
+                bubble.classList.remove('show');
+                
+                img.style.display = 'none';
+                video.style.display = 'block';
+                
+                video.currentTime = 0;
+                video.play().catch(e => {
+                    console.log("Autoplay failed", e);
+                    revertMascot();
+                });
+            });
+
+            video.addEventListener('ended', revertMascot);
+
+            function revertMascot() {
+                isVideoPlaying = false;
+                video.style.display = 'none';
+                img.style.display = 'block';
+            }
+        }
+
+        async function loadGiftsFromDB() {
+            try {
+                const { data, error } = await supabase.from('gift_library').select('*').order('cost', { ascending: true });
+                if(!error && data) globalGifts = data;
+            } catch(e) { console.error("Gifts error", e); }
+        }
+
+        function switchAuthTab(tab) {
+            document.getElementById('auth-error').classList.add('hidden');
+            if (tab === 'login') {
+                document.getElementById('tab-login').className = "flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 bg-slate-800 text-white shadow shadow-black/20";
+                document.getElementById('tab-signup').className = "flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white";
+                document.getElementById('form-login').className = 'space-y-5 block';
+                document.getElementById('form-signup').className = 'space-y-4 hidden';
+            } else {
+                document.getElementById('tab-signup').className = "flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 bg-slate-800 text-white shadow shadow-black/20";
+                document.getElementById('tab-login').className = "flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white";
+                document.getElementById('form-signup').className = 'space-y-4 block';
+                document.getElementById('form-login').className = 'space-y-5 hidden';
+            }
+        }
+
+        async function checkAuth() {
+            const { data: { session } } = await supabase.auth.getSession();
+            handleAuthChange(session);
+            supabase.auth.onAuthStateChange((_event, session) => handleAuthChange(session));
+        }
+
+        function handleAuthChange(session) {
+            if (session) {
+                currentUser = session.user;
+                document.getElementById('auth-modal').classList.remove('active');
+                document.getElementById('user-display').innerHTML = `<i class="fas fa-user-circle mr-1.5 text-slate-400 flex-shrink-0"></i><span class="truncate">${currentUser.email}</span>`;
+                document.getElementById('btn-logout').classList.remove('hidden');
+                loadWidgets();
+            } else {
+                currentUser = null;
+                document.getElementById('auth-modal').classList.add('active');
+                document.getElementById('btn-logout').classList.add('hidden');
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            if(!email || !password) return showError("Введите email и пароль");
+            const btn = document.querySelector('#form-login button');
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) { showError(error.message); btn.innerHTML = 'Войти'; }
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('signup-email').value;
+            const pass = document.getElementById('signup-password').value;
+            const conf = document.getElementById('signup-password-confirm').value;
+            if(!email || !pass) return showError("Введите email и пароль");
+            if(pass.length < 6) return showError("Пароль минимум 6 символов");
+            if(pass !== conf) return showError("Пароли не совпадают!");
+            const btn = document.querySelector('#form-signup button');
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            const { data, error } = await supabase.auth.signUp({ email, password: pass });
+            if (error) { showError(error.message); btn.innerHTML = 'Создать аккаунт'; }
+            else {
+                await supabase.auth.signInWithPassword({ email, password: pass });
+                btn.innerHTML = 'Создать аккаунт';
+                switchAuthTab('login');
+                showMessage("Успех", "Аккаунт создан");
+            }
+        }
+
+        async function handleLogout() {
+            await supabase.auth.signOut();
+            widgets = []; currentWidget = null;
+            document.getElementById('editor-panel').classList.add('hidden');
+            document.getElementById('editor-panel').classList.remove('flex');
+            document.getElementById('empty-state').classList.remove('hidden');
+            document.getElementById('widgets-list').innerHTML = '';
+            switchAuthTab('login');
+        }
+
+        function showError(msg) { 
+            document.getElementById('auth-error').textContent = msg; 
+            document.getElementById('auth-error').classList.remove('hidden'); 
+        }
+
+        async function loadWidgets() { 
+            const listEl = document.getElementById('widgets-list');
+            listEl.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm"><i class="fas fa-circle-notch fa-spin text-xl mb-2"></i></div>';
+           const { data, error } = await supabase.from('p_widgets')
+               .select('*')
+               .eq('user_id', currentUser.id) 
+               .order('created_at', { ascending: false });
+            if (error) return listEl.innerHTML = '<div class="text-red-400 text-sm p-4 text-center">Ошибка загрузки</div>';
+            widgets = data || [];
+            renderWidgetList();
+        }
+
+        function renderWidgetList() { 
+            const listEl = document.getElementById('widgets-list');
+            listEl.innerHTML = '';
+            if (widgets.length === 0) return listEl.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm bg-slate-900/30 rounded-xl border border-dashed border-white/5 mt-2">Нет виджетов</div>';
+            
+            widgets.forEach(w => {
+                const div = document.createElement('div');
+                const isSel = currentWidget?.id === w.id;
+                div.className = `p-3.5 rounded-xl border cursor-pointer transition-all duration-200 flex items-center gap-3.5 group ${isSel ? 'bg-blue-600/10 border-blue-500/50 shadow-[inset_0_0_20px_rgba(59,130,246,0.05)]' : 'bg-slate-800/40 border-transparent hover:border-slate-600 hover:bg-slate-800/80'}`;
+                div.onclick = () => selectWidget(w);
+                
+                let icon = 'fa-film', typeText = 'Строка картинок', color = 'text-orange-400', bg = 'bg-orange-400/10';
+                if(w.widget_type === 'multi-slideshow') { icon = 'fa-th-large'; typeText = 'Слайдшоу'; color = 'text-pink-400'; bg = 'bg-pink-400/10'; }
+
+                div.innerHTML = `
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center ${bg} ${color} group-hover:scale-110 transition-transform"><i class="fas ${icon}"></i></div>
+                    <div class="flex-1 overflow-hidden"><div class="font-semibold text-white truncate text-sm">${w.name}</div><div class="text-xs text-slate-400 mt-0.5">${typeText}</div></div>
+                    <i class="fas fa-chevron-right text-slate-600 text-xs opacity-0 ${isSel ? 'opacity-100' : 'group-hover:opacity-100'} transition-opacity"></i>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        function showCreateModal() { document.getElementById('new-widget-name').value = ''; document.getElementById('create-modal').classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        async function createWidget() {
+            const name = document.getElementById('new-widget-name').value.trim();
+            const type = document.getElementById('new-widget-type').value;
+            if (!name) return alertCustom("Ошибка", "Введите название");
+
+            const config = JSON.parse(JSON.stringify(DEFAULT_CONFIGS[type]));
+            config.rows[0].id = Date.now().toString();
+
+            const { data, error } = await supabase.from('p_widgets').insert([{ user_id: currentUser.id, name, widget_type: type, config }]).select();
+            if (error) return alertCustom("Ошибка", "Не удалось создать");
+            closeModal('create-modal'); await loadWidgets();
+            if (data && data.length > 0) selectWidget(data[0]);
+        }
+
+        function selectWidget(widget) {
+            currentWidget = widget; 
+            if (currentWidget.widget_type === 'multi-slideshow' && !currentWidget.config.rows) {
+                currentWidget.config.rows = [{ id: Date.now().toString(), items: [] }];
+            }
+
+            renderWidgetList();
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('editor-panel').classList.remove('hidden');
+            document.getElementById('editor-panel').classList.add('flex');
+            document.getElementById('editor-title').textContent = widget.name;
+            
+            buildSettingsForm(); 
+            updatePreview();
+        }
+
+        async function saveWidget() {
+            if (!currentWidget) return;
+            syncFormToConfig();
+            
+            const { error } = await supabase.from('p_widgets')
+                .update({ config: currentWidget.config })
+                .eq('id', currentWidget.id);
+                
+            if (error) {
+                console.error("Save error:", error);
+                return alertCustom("Ошибка", "Не удалось сохранить. Проверьте консоль.");
+            }
+            
+            const btn = document.querySelector('button[onclick="saveWidget()"]');
+            if(btn) {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Сохранено'; 
+                btn.classList.replace('bg-blue-600', 'bg-green-600');
+                setTimeout(() => { 
+                    btn.innerHTML = orig; 
+                    btn.classList.replace('bg-green-600', 'bg-blue-600'); 
+                }, 2000);
+            }
+        }
+
+        async function deleteCurrentWidget() {
+            if (!currentWidget) return;
+            const btn = document.querySelector('button[onclick="deleteCurrentWidget()"]');
+            if (btn.textContent.includes('Точно?')) {
+                await supabase.from('p_widgets').delete().eq('id', currentWidget.id);
+                currentWidget = null;
+                document.getElementById('editor-panel').classList.add('hidden'); document.getElementById('editor-panel').classList.remove('flex');
+                document.getElementById('empty-state').classList.add('hidden'); await loadWidgets();
+                btn.innerHTML = '<i class="fas fa-trash-alt"></i> Удалить виджет';
+            } else {
+                btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Точно?';
+                setTimeout(() => { if(currentWidget) btn.innerHTML = '<i class="fas fa-trash-alt"></i> Удалить виджет'; }, 3000);
+            }
+        }
+
+        function buildSettingsForm() {
+            const form = document.getElementById('settings-form');
+            form.innerHTML = '';
+            const c = currentWidget.config;
+            const isMarquee = currentWidget.widget_type === 'image-marquee';
+            const fontsOptions = GOOGLE_FONTS.map(f => `<option value="${f}" ${c.fontFamily===f?'selected':''}>${f}</option>`).join('');
+            
+            const editorLayout = document.getElementById('editor-layout');
+            const previewWrapper = document.getElementById('preview-wrapper');
+            const formWrapper = document.getElementById('settings-form-wrapper');
+
+            if (!isMarquee) { 
+                editorLayout.className = 'flex flex-col lg:flex-row-reverse gap-6 items-start';
+                previewWrapper.className = 'w-full lg:w-[45%] flex-shrink-0 lg:sticky lg:top-24';
+                formWrapper.className = 'w-full lg:w-[55%] flex-grow';
+            } else {
+                editorLayout.className = 'flex flex-col gap-6';
+                previewWrapper.className = 'w-full flex-shrink-0';
+                formWrapper.className = 'w-full flex-grow';
+            }
+            setTimeout(resizePreview, 50);
+            
+            let extraInputs = '';
+            if(isMarquee){
+                extraInputs = `
+                    <div class="col-span-1 md:col-span-2 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 mb-2">Затухание по краям (Fade)</label>
+                                <select id="setting-edge-fade" onchange="debouncePreview()" class="${inputClass}">
+                                    <option value="none" ${c.edgeFade==='none'?'selected':''}>Без затухания</option>
+                                    <option value="small" ${c.edgeFade==='small'?'selected':''}>Слабое</option>
+                                    <option value="medium" ${!c.edgeFade || c.edgeFade==='medium'?'selected':''}>Среднее</option>
+                                    <option value="large" ${c.edgeFade==='large'?'selected':''}>Сильное</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Глобальная высота элементов</label>
+                                <span id="val-img-height" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">${c.imageHeight || 150}px</span>
+                            </div>
+                            <input type="range" id="setting-img-height" min="50" max="400" value="${c.imageHeight || 150}" oninput="document.getElementById('val-img-height').textContent = this.value + 'px'; debouncePreview()">
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Отступ между строками</label>
+                                <span id="val-gap" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">${c.gap !== undefined ? c.gap : 20}px</span>
+                            </div>
+                            <input type="range" id="setting-gap" min="-200" max="200" value="${c.gap !== undefined ? c.gap : 20}" oninput="document.getElementById('val-gap').textContent = this.value + 'px'; debouncePreview()">
+                        </div>
+                    </div>
+                `;
+            } else {
+                extraInputs = `
+                    <div class="col-span-1 md:col-span-2 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="${labelClass}">Задержка показа (сек)</label>
+                            <input type="number" id="setting-delay" value="${c.delay || 5}" min="1" max="60" oninput="debouncePreview()" class="${inputClass}">
+                        </div>
+                        <div>
+                            <label class="${labelClass}">Анимация смены</label>
+                            <select id="setting-transition" onchange="debouncePreview()" class="${inputClass}">
+                                <option value="fade" ${c.transition==='fade'?'selected':''}>Fade</option>
+                                <option value="slide-left" ${c.transition==='slide-left'?'selected':''}>Влево</option>
+                                <option value="zoom-in" ${c.transition==='zoom-in'?'selected':''}>Zoom</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="${labelClass}">Расположение блоков</label>
+                            <select id="setting-layout" onchange="debouncePreview()" class="${inputClass}">
+                                <option value="column" ${!c.layout || c.layout==='column'?'selected':''}>Столбцом (Вертикально)</option>
+                                <option value="row" ${c.layout==='row'?'selected':''}>Строкой (Горизонтально)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-span-1 md:col-span-2 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 space-y-4">
+                        <div>
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Ограничитель высоты (для слайда)</label>
+                                <span id="val-row-height" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">${c.rowHeight || 320}px</span>
+                            </div>
+                            <input type="range" id="setting-row-height" min="100" max="600" value="${c.rowHeight || 320}" oninput="document.getElementById('val-row-height').textContent = this.value + 'px'; debouncePreview()">
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="block text-xs font-semibold text-slate-400">Отступ между блоками</label>
+                                <span id="val-gap" class="text-xs font-mono text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">${c.gap !== undefined ? c.gap : 20}px</span>
+                            </div>
+                            <input type="range" id="setting-gap" min="-200" max="300" value="${c.gap !== undefined ? c.gap : 20}" oninput="document.getElementById('val-gap').textContent = this.value + 'px'; debouncePreview()">
+                        </div>
+                    </div>
+                `;
+            }
+
+            form.innerHTML = `
+                <div class="col-span-1 md:col-span-2">
+                    <h3 class="text-sm font-bold text-white mb-3">Глобальный текст</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="${labelClass}">Шрифт</label>
+                            <select id="setting-font" onchange="debouncePreview()" class="${inputClass}">
+                                <option value="Inter" ${!c.fontFamily||c.fontFamily==='Inter'?'selected':''}>Inter (По умолчанию)</option>
+                                ${fontsOptions}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="${labelClass}">Глобальный цвет</label>
+                            <div class="flex gap-2 bg-slate-950/50 p-1 rounded-lg border border-slate-700">
+                                <input type="color" id="setting-color" value="${c.color || '#ffffff'}" class="h-8 w-full cursor-pointer bg-transparent border-0 rounded" oninput="debouncePreview()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${extraInputs}
+                <div class="col-span-1 md:col-span-2 mt-4 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50">
+                    <div class="flex justify-between items-center mb-5 border-b border-slate-700 pb-3">
+                        <h4 class="text-sm font-semibold text-white"><i class="fas fa-layer-group mr-2 text-slate-400"></i>Управление строками</h4>
+                        <button onclick="addRow()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-md"><i class="fas fa-plus mr-1"></i> Добавить строку</button>
+                    </div>
+                    <div id="rows-container" class="space-y-4"></div>
+                </div>
+            `;
+            renderRowsEditor();
+        }
+
+        function renderRowsEditor() {
+            const container = document.getElementById('rows-container');
+            if(!container) return;
+            container.innerHTML = '';
+            
+            const rows = currentWidget.config.rows || [];
+            const isMarquee = currentWidget.widget_type === 'image-marquee';
+
+            rows.forEach((row, index) => {
+                const rowEl = document.createElement('div');
+                rowEl.className = 'bg-slate-900/80 border border-slate-700 rounded-xl p-4 relative group';
+                
+                let controlsHtml = '';
+                if(isMarquee) {
+                    controlsHtml = `
+                    <div class="flex gap-4 mb-4">
+                        <div class="flex-1">
+                            <label class="${labelClass} text-[10px]">Время на 1 эл. (сек)</label>
+                            <input type="number" value="${row.speed !== undefined ? row.speed : 5}" min="0.1" max="50" step="0.5" class="row-speed ${inputClass}" data-idx="${index}" oninput="updateRowConfig(this)">
+                        </div>
+                        <div class="flex-1">
+                            <label class="${labelClass} text-[10px]">Направление</label>
+                            <select class="row-dir ${inputClass}" data-idx="${index}" onchange="updateRowConfig(this)">
+                                <option value="left" ${row.direction==='left'?'selected':''}>Влево</option>
+                                <option value="right" ${row.direction==='right'?'selected':''}>Вправо</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="${labelClass} text-[10px]">Отступ между элементами</label>
+                            <input type="number" value="${row.itemGap !== undefined ? row.itemGap : 30}" min="0" max="200" class="row-item-gap ${inputClass}" data-idx="${index}" oninput="updateRowConfig(this)">
+                        </div>
+                    </div>`;
+                }
+
+                rowEl.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h5 class="font-semibold text-slate-200 text-sm flex items-center"><span class="w-6 h-6 rounded-md bg-slate-800 border border-slate-600 flex items-center justify-center text-xs mr-2 text-slate-400">${index + 1}</span> Блок/Строка</h5>
+                        <button onclick="removeRow(${index})" class="w-7 h-7 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-md flex items-center justify-center transition-colors"><i class="fas fa-times text-sm"></i></button>
+                    </div>
+                    ${controlsHtml}
+                    <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+                        <div class="flex flex-wrap gap-2 mb-3">
+                            <label class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg cursor-pointer text-xs font-medium transition-colors flex items-center">
+                                <i class="fas fa-upload mr-1.5"></i> Фото
+                                <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event, ${index})">
+                            </label>
+                            <button onclick="openGiftSelector(${index})" class="bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 px-3 py-1.5 rounded-lg cursor-pointer text-xs font-medium transition-colors flex items-center">
+                                <i class="fas fa-gift mr-1.5"></i> Подарок
+                            </button>
+                        </div>
+                        <div id="row-items-${index}" class="flex gap-2 overflow-x-auto pb-2 custom-scroll items-center"></div>
+                    </div>
+                `;
+                container.appendChild(rowEl);
+                renderItemsList(`row-items-${index}`, row.items || [], index);
+            });
+            if(rows.length===0) container.innerHTML = '<div class="text-center text-slate-500 py-6 text-sm border border-dashed border-slate-700 rounded-xl">Нет строк</div>';
+        }
+
+        async function addRow() {
+            if(!currentWidget.config.rows) currentWidget.config.rows = [];
+            currentWidget.config.rows.push({ id: Date.now().toString(), speed: 5, direction: 'left', itemGap: 30, items: [] });
+            renderRowsEditor(); debouncePreview();
+            await saveWidget(); 
+        }
+        
+        async function removeRow(idx) {
+            currentWidget.config.rows.splice(idx, 1);
+            renderRowsEditor(); debouncePreview();
+            await saveWidget(); 
+        }
+        
+        function updateRowConfig(el) {
+            const idx = el.getAttribute('data-idx');
+            if(el.classList.contains('row-speed')) currentWidget.config.rows[idx].speed = parseFloat(el.value) || 5;
+            if(el.classList.contains('row-dir')) currentWidget.config.rows[idx].direction = el.value;
+            if(el.classList.contains('row-item-gap')) currentWidget.config.rows[idx].itemGap = parseInt(el.value) || 0;
+            debouncePreview();
+        }
+
+        function renderItemsList(containerId, items, rowIndex) {
+            const list = document.getElementById(containerId);
+            if(!list) return;
+            list.innerHTML = '';
+            if(items.length === 0) { list.innerHTML = '<div class="w-full text-slate-500 text-xs text-center py-4">Пусто</div>'; return; }
+
+            items.forEach((item, i) => {
+                const div = document.createElement('div');
+                div.className = 'relative flex-shrink-0 w-24 h-24 bg-slate-900 rounded-lg group border border-slate-700 shadow-sm flex items-center justify-center';
+                
+                const imgSrc = item.type === 'gift' ? (globalGifts.find(g=>g.gift_id===item.gift_id)?.icon || '') : item.url;
+                const iconBadge = item.type === 'gift' ? '<div class="absolute top-1 left-1 bg-indigo-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold z-10"><i class="fas fa-gift"></i></div>' : '<div class="absolute top-1 left-1 bg-slate-700 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold z-10"><i class="fas fa-image"></i></div>';
+                
+                div.innerHTML = `
+                    ${iconBadge}
+                    <img src="${imgSrc}" class="w-full h-full object-contain p-2">
+                    <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 rounded-lg">
+                        <button onclick="openItemEditor(${rowIndex}, ${i})" class="bg-blue-500 hover:bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform"><i class="fas fa-cog text-xs"></i></button>
+                        <button onclick="removeItem(${rowIndex}, ${i})" class="bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform"><i class="fas fa-trash text-xs"></i></button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function handleImageUpload(event, rowIndex) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const label = event.target.parentElement;
+            const orig = label.innerHTML;
+            label.innerHTML = '<i class="fas fa-spinner fa-spin"></i>...';
+            try {
+                const ext = file.name.split('.').pop();
+                const path = `${currentUser.id}/${Math.random().toString(36).substring(2)}.${ext}`;
+                const { error } = await supabase.storage.from('p_widget_assets').upload(path, file);
+                if (error) throw error;
+                const { data } = supabase.storage.from('p_widget_assets').getPublicUrl(path);
+                if(!currentWidget.config.rows[rowIndex].items) currentWidget.config.rows[rowIndex].items = [];
+                
+                currentWidget.config.rows[rowIndex].items.push({ 
+                    type: 'image', url: data.publicUrl,
+                    text: '', fontSize: 28, offset: 0,
+                    position: 'bottom', effect: 'shadow', effectColor: '#000000', effectWidth: 2,
+                    itemHeight: 0, itemGlow: 'none', itemGlowColor: '#3b82f6'
+                });
+                
+                renderItemsList(`row-items-${rowIndex}`, currentWidget.config.rows[rowIndex].items, rowIndex);
+                debouncePreview();
+                await saveWidget(); 
+            } catch(e) { alertCustom("Ошибка", "Сбой загрузки"); }
+            finally { label.innerHTML = orig; event.target.value = ''; }
+        }
+
+        async function removeItem(rowIndex, imgIndex) {
+            currentWidget.config.rows[rowIndex].items.splice(imgIndex, 1);
+            renderItemsList(`row-items-${rowIndex}`, currentWidget.config.rows[rowIndex].items, rowIndex);
+            debouncePreview();
+            await saveWidget(); 
+        }
+
+        function openGiftSelector(rowIndex) {
+            const grid = document.getElementById('gift-library-grid');
+            if(globalGifts.length === 0) { grid.innerHTML = '<div class="col-span-full text-center text-slate-500">Библиотека подарков пуста</div>'; }
+            else {
+                grid.innerHTML = globalGifts.map(g => `
+                    <div onclick="addGiftToRow('${g.gift_id}', ${rowIndex})" class="bg-slate-800/50 border border-slate-700 hover:border-indigo-500 rounded-xl p-3 cursor-pointer transition-all hover:bg-slate-800 flex flex-col items-center text-center group">
+                        <img src="${g.icon}" class="w-16 h-16 object-contain mb-2 group-hover:scale-110 transition-transform">
+                        <div class="font-bold text-sm text-white">${g.name}</div>
+                        <div class="text-xs text-indigo-400 font-medium">${g.cost} ₽</div>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('gift-selector-modal').classList.add('active');
+        }
+
+        async function addGiftToRow(giftId, rowIndex) {
+            closeModal('gift-selector-modal');
+            if(!currentWidget.config.rows[rowIndex].items) currentWidget.config.rows[rowIndex].items = [];
+            currentWidget.config.rows[rowIndex].items.push({ 
+                type: 'gift', gift_id: giftId,
+                text: '{name}\\n{cost}₽', fontSize: 28, offset: 0,
+                position: 'bottom', effect: 'shadow', effectColor: '#000000', effectWidth: 2,
+                itemHeight: 0, itemGlow: 'none', itemGlowColor: '#3b82f6'
+            });
+            renderItemsList(`row-items-${rowIndex}`, currentWidget.config.rows[rowIndex].items, rowIndex);
+            debouncePreview();
+            await saveWidget(); 
+        }
+
+        function openItemEditor(rowIndex, itemIndex) {
+            const item = currentWidget.config.rows[rowIndex].items[itemIndex];
+            document.getElementById('ie-rowIndex').value = rowIndex;
+            document.getElementById('ie-itemIndex').value = itemIndex;
+            
+            document.getElementById('ie-text').value = (item.text || '').replace(/\\n/g, '\n');
+            document.getElementById('ie-fontSize').value = item.fontSize || 28;
+            document.getElementById('val-ie-font').textContent = (item.fontSize || 28) + 'px';
+            document.getElementById('ie-offset').value = item.offset || 0;
+            document.getElementById('val-ie-offset').textContent = (item.offset || 0) + 'px';
+            document.getElementById('ie-position').value = item.position || 'bottom';
+            document.getElementById('ie-effect').value = item.effect || 'none';
+            document.getElementById('ie-effectWidth').value = item.effectWidth || 2;
+            document.getElementById('val-ie-width').textContent = (item.effectWidth || 2) + 'px';
+            document.getElementById('ie-effectColor').value = item.effectColor || '#000000';
+            
+            document.getElementById('ie-itemHeight').value = item.itemHeight || 0;
+            document.getElementById('val-ie-size').textContent = (item.itemHeight || 0) == 0 ? 'Глобальный' : (item.itemHeight + 'px');
+            document.getElementById('ie-itemGlow').value = item.itemGlow || 'none';
+            document.getElementById('ie-itemGlowColor').value = item.itemGlowColor || '#3b82f6';
+            
+            const hint = document.getElementById('ie-text-hint');
+            if(item.type === 'image') hint.textContent = "Текст будет показан поверх или рядом с картинкой.";
+            else hint.textContent = "Доступно: {name}, {cost}";
+
+            document.getElementById('item-editor-modal').classList.add('active');
+            updateItemLivePreview();
+        }
+
+        function closeItemEditor() { closeModal('item-editor-modal'); }
+
+        async function saveItemEdit() {
+            const rIdx = document.getElementById('ie-rowIndex').value;
+            const iIdx = document.getElementById('ie-itemIndex').value;
+            const item = currentWidget.config.rows[rIdx].items[iIdx];
+            
+            item.text = document.getElementById('ie-text').value.replace(/\n/g, '\\n');
+            item.fontSize = parseInt(document.getElementById('ie-fontSize').value);
+            item.offset = parseInt(document.getElementById('ie-offset').value);
+            item.position = document.getElementById('ie-position').value;
+            item.effect = document.getElementById('ie-effect').value;
+            item.effectWidth = parseInt(document.getElementById('ie-effectWidth').value);
+            item.effectColor = document.getElementById('ie-effectColor').value;
+            
+            item.itemHeight = parseInt(document.getElementById('ie-itemHeight').value) || 0;
+            item.itemGlow = document.getElementById('ie-itemGlow').value;
+            item.itemGlowColor = document.getElementById('ie-itemGlowColor').value;
+            
+            closeItemEditor();
+            debouncePreview();
+            
+            await saveWidget(); 
+        }
+
+        function getStrokeTextShadow(width, color) {
+            const w = parseInt(width);
+            if(w <= 0) return '';
+            let shadow = [];
+            const steps = w > 3 ? 16 : 8; 
+            for(let i=0; i<steps; i++) {
+                const angle = (i * 2 * Math.PI) / steps;
+                const x = (Math.cos(angle) * w).toFixed(1);
+                const y = (Math.sin(angle) * w).toFixed(1);
+                shadow.push(`${x}px ${y}px 0 ${color}`);
+            }
+            return shadow.join(', ');
+        }
+
+        function buildItemElement(itemData, globalConfig, customGiftData = null) {
+            const wrap = document.createElement('div');
+            wrap.style.position = 'relative';
+            wrap.style.display = 'flex';
+            wrap.style.flexDirection = itemData.position === 'top' ? 'column-reverse' : 'column';
+            wrap.style.alignItems = 'center';
+            wrap.style.justifyContent = 'center';
+            
+            const img = document.createElement('img');
+            
+            let tpl = itemData.text || '';
+            if(itemData.type === 'gift') {
+                const dbGift = customGiftData || globalGifts.find(g => g.gift_id === itemData.gift_id);
+                if(!dbGift) return wrap;
+                img.src = dbGift.icon;
+                tpl = tpl.replace(/{name}/g, dbGift.name).replace(/{cost}/g, dbGift.cost);
+            } else {
+                img.src = itemData.url;
+            }
+
+            const finalHeight = (itemData.itemHeight && itemData.itemHeight > 0) ? itemData.itemHeight : (globalConfig.imageHeight || 150);
+            img.style.maxHeight = `${finalHeight}px`;
+            img.className = "object-contain shrink-0";
+            
+            if(itemData.itemGlow === 'shadow') {
+                img.style.filter = `drop-shadow(0px 10px 15px ${itemData.itemGlowColor || '#000'})`;
+            } else if(itemData.itemGlow === 'glow') {
+                img.style.filter = `drop-shadow(0px 0px 15px ${itemData.itemGlowColor || '#3b82f6'}) drop-shadow(0px 0px 30px ${itemData.itemGlowColor || '#3b82f6'})`;
+            }
+
+            if(tpl.trim() !== '') {
+                const text = document.createElement('div');
+                text.innerHTML = tpl.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+                text.style.fontFamily = `"${globalConfig.fontFamily || 'Inter'}", sans-serif`;
+                text.style.color = globalConfig.color || '#fff';
+                text.style.fontSize = `${itemData.fontSize || 28}px`;
+                text.style.fontWeight = '900';
+                text.style.textAlign = 'center';
+                text.style.lineHeight = '1.1';
+                text.style.whiteSpace = 'nowrap';
+                text.style.zIndex = '2';
+                
+                if(itemData.position === 'center') {
+                    text.style.position = 'absolute';
+                    text.style.top = '50%'; text.style.left = '50%';
+                    text.style.transform = `translate(-50%, calc(-50% + ${itemData.offset || 0}px))`;
+                } else {
+                    text.style.marginTop = itemData.position === 'bottom' ? `${itemData.offset || 0}px` : '0';
+                    text.style.marginBottom = itemData.position === 'top' ? `${itemData.offset || 0}px` : '0';
+                }
+
+                const eWidth = itemData.effectWidth || 2;
+                const eCol = itemData.effectColor || '#000';
+                
+                if(itemData.effect === 'shadow') text.style.textShadow = `4px 4px ${eWidth*2}px ${eCol}`;
+                else if(itemData.effect === 'glow') text.style.textShadow = `0 0 ${eWidth*5}px ${eCol}, 0 0 ${eWidth*10}px ${eCol}`;
+                else if(itemData.effect === 'outline') text.style.textShadow = getStrokeTextShadow(eWidth, eCol);
+                else if(itemData.effect === 'glow-outline') {
+                    const out = getStrokeTextShadow(eWidth, eCol);
+                    text.style.textShadow = `${out}, 0 0 15px currentColor`;
+                }
+                wrap.appendChild(text);
+            }
+
+            wrap.appendChild(img);
+            if(tpl.trim() !== '' && itemData.position === 'top') {
+                img.style.order = "2";
+                wrap.children[0].style.order = "1";
+            } else if(tpl.trim() !== '' && itemData.position === 'bottom') {
+                img.style.order = "1";
+                wrap.children[0].style.order = "2";
+            }
+
+            return wrap;
+        }
+
+        function updateItemLivePreview() {
+            const container = document.getElementById('ie-live-preview-container');
+            const rIdx = document.getElementById('ie-rowIndex').value;
+            const iIdx = document.getElementById('ie-itemIndex').value;
+            const item = currentWidget.config.rows[rIdx].items[iIdx];
+            
+            const tempItem = {
+                ...item,
+                text: document.getElementById('ie-text').value.replace(/\n/g, '\\n'),
+                fontSize: parseInt(document.getElementById('ie-fontSize').value),
+                offset: parseInt(document.getElementById('ie-offset').value),
+                position: document.getElementById('ie-position').value,
+                effect: document.getElementById('ie-effect').value,
+                effectWidth: parseInt(document.getElementById('ie-effectWidth').value),
+                effectColor: document.getElementById('ie-effectColor').value,
+                itemHeight: parseInt(document.getElementById('ie-itemHeight').value) || 0,
+                itemGlow: document.getElementById('ie-itemGlow').value,
+                itemGlowColor: document.getElementById('ie-itemGlowColor').value
+            };
+            
+            const previewConfig = { ...currentWidget.config };
+            if(currentWidget.widget_type === 'multi-slideshow') {
+                previewConfig.imageHeight = (currentWidget.config.rowHeight || 320) - 60;
+            }
+
+            container.innerHTML = '';
+            const el = buildItemElement(tempItem, previewConfig);
+            container.appendChild(el);
+            loadFont(currentWidget.config.fontFamily);
+        }
+
+        function syncFormToConfig() {
+            if (!currentWidget) return;
+            const c = currentWidget.config;
+            c.fontFamily = document.getElementById('setting-font').value;
+            c.color = document.getElementById('setting-color').value;
+
+            if (currentWidget.widget_type === 'image-marquee') {
+                c.imageHeight = parseInt(document.getElementById('setting-img-height').value) || 150;
+                c.edgeFade = document.getElementById('setting-edge-fade').value;
+                let g = parseInt(document.getElementById('setting-gap').value);
+                c.gap = isNaN(g) ? 20 : g;
+            } else if (currentWidget.widget_type === 'multi-slideshow') {
+                c.delay = parseInt(document.getElementById('setting-delay').value) || 5;
+                c.transition = document.getElementById('setting-transition').value;
+                
+                const layoutEl = document.getElementById('setting-layout');
+                if (layoutEl) c.layout = layoutEl.value;
+                
+                c.rowHeight = parseInt(document.getElementById('setting-row-height').value) || 320;
+                let g = parseInt(document.getElementById('setting-gap').value);
+                c.gap = isNaN(g) ? 20 : g;
+            }
+        }
+
+        function debouncePreview() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => { syncFormToConfig(); updatePreview(); }, 300);
+        }
+
+        function loadFont(fontName) {
+            if (!fontName || loadedFonts.has(fontName) || fontName === 'Inter') return;
+            const id = 'font-' + fontName.replace(/\s+/g, '-');
+            if (!document.getElementById(id)) {
+                const link = document.createElement('link');
+                link.id = id; link.rel = 'stylesheet';
+                link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g, '+')}:wght@400;700;900&display=swap`;
+                document.head.appendChild(link);
+                loadedFonts.add(fontName);
+            }
+        }
+
+        function resizePreview() {
+            const bounds = document.getElementById('preview-bounds');
+            const container = document.getElementById('preview-container');
+            if(!bounds || !container) return;
+            
+            const c = currentWidget ? currentWidget.config : null;
+            let targetHeight = 600;
+
+            if (c) {
+                const rowsCount = (c.rows || []).length;
+                const gap = c.gap !== undefined ? c.gap : 20;
+                
+                if (currentWidget.widget_type === 'multi-slideshow') {
+                    const rHeight = c.rowHeight || 320;
+                    if (c.layout === 'row') {
+                        targetHeight = rHeight;
+                    } else {
+                        targetHeight = (rowsCount * rHeight) + Math.max(0, rowsCount - 1) * gap;
+                    }
+                    targetHeight = Math.max(600, targetHeight);
+                } else if (currentWidget.widget_type === 'image-marquee') {
+                    let maxItemHeight = c.imageHeight || 150;
+                    if(c.rows) {
+                        c.rows.forEach(r => {
+                            if(r.items) {
+                                r.items.forEach(i => {
+                                    if(i.itemHeight && i.itemHeight > maxItemHeight) maxItemHeight = i.itemHeight;
+                                });
+                            }
+                        });
+                    }
+                    targetHeight = (rowsCount * maxItemHeight) + Math.max(0, rowsCount - 1) * gap + 120; 
+                    targetHeight = Math.max(600, targetHeight);
+                }
+            }
+
+            const scale = bounds.clientWidth / 800;
+            
+            container.style.width = `800px`;
+            container.style.height = `${targetHeight}px`;
+            container.style.transform = `scale(${scale})`;
+            
+            bounds.style.height = `${targetHeight * scale}px`;
+
+            const hint = document.getElementById('obs-hint-text');
+            if (hint) {
+                hint.innerHTML = `Предпросмотр <span class="lowercase text-[10px] text-blue-400 bg-blue-900/20 px-2 py-0.5 rounded font-mono">(Холст OBS: Ширина 800px, Высота ${targetHeight}px)</span>`;
+            }
+        }
+
+        function updatePreview() {
+            const container = document.getElementById('preview-container');
+            if(!container) return;
+            renderWidget(currentWidget, container);
+            setTimeout(resizePreview, 50); 
+        }
+
+        function renderWidget(widget, container) {
+            container.innerHTML = '';
+            if (previewInterval) { clearInterval(previewInterval); previewInterval = null; }
+            if (previewIntervals) { previewIntervals.forEach(clearInterval); previewIntervals = []; }
+            
+            const c = widget.config;
+            loadFont(c.fontFamily);
+
+            if (widget.widget_type === 'image-marquee') {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'marquee-wrapper';
+
+                (c.rows || []).forEach((row, rowIndex) => {
+                    if(!row.items || row.items.length === 0) return;
+                    
+                    const track = document.createElement('div');
+                    track.className = 'marquee-track-container';
+                    
+                    if(c.edgeFade && c.edgeFade !== 'none') track.classList.add(`fade-edges-${c.edgeFade}`);
+                    if (rowIndex > 0) track.style.marginTop = `${c.gap !== undefined ? c.gap : 20}px`;
+                    
+                    const buildContent = () => {
+                        const content = document.createElement('div');
+                        content.className = 'marquee-content';
+                        
+                        let multipliedItems = [];
+                        const DUPLICATES = 15;
+                        for(let k=0; k<DUPLICATES; k++) multipliedItems.push(...row.items);
+                        
+                        const timePerItem = row.speed !== undefined ? row.speed : 5;
+                        const totalDuration = timePerItem * multipliedItems.length;
+
+                        content.style.animation = `marquee-${row.direction || 'left'} ${totalDuration}s linear infinite`;
+
+                        multipliedItems.forEach(item => {
+                            const itemEl = buildItemElement(item, c);
+                            itemEl.style.marginLeft = `${(row.itemGap !== undefined ? row.itemGap : 30) / 2}px`;
+                            itemEl.style.marginRight = `${(row.itemGap !== undefined ? row.itemGap : 30) / 2}px`;
+                            content.appendChild(itemEl);
+                        });
+                        return content;
+                    };
+
+                    track.appendChild(buildContent());
+                    track.appendChild(buildContent());
+                    wrapper.appendChild(track);
+                });
+                
+                if(wrapper.children.length === 0) wrapper.innerHTML = '<div class="text-slate-500 text-sm font-medium m-auto pt-20">Добавьте элементы в строки</div>';
+                container.appendChild(wrapper);
+            }
+            else if (widget.widget_type === 'multi-slideshow') {
+                const wrapper = document.createElement('div');
+                const isRowLayout = c.layout === 'row';
+                wrapper.className = `w-full h-full flex ${isRowLayout ? 'flex-row' : 'flex-col'} justify-center items-center`;
+
+                (c.rows || []).forEach((row, rowIndex) => {
+                    const rowContainer = document.createElement('div');
+                    const rHeight = c.rowHeight || 320;
+                    
+                    if (isRowLayout) {
+                        rowContainer.style.height = `${rHeight}px`;
+                        rowContainer.style.flex = '1';
+                        if (rowIndex > 0) rowContainer.style.marginLeft = `${c.gap !== undefined ? c.gap : 20}px`;
+                    } else {
+                        rowContainer.style.height = `${rHeight}px`;
+                        rowContainer.style.width = '100%';
+                        if (rowIndex > 0) rowContainer.style.marginTop = `${c.gap !== undefined ? c.gap : 20}px`;
+                    }
+                    
+                    rowContainer.style.position = 'relative';
+                    rowContainer.style.overflow = 'hidden';
+
+                    if (!row.items || row.items.length === 0) {
+                        rowContainer.innerHTML = '<div class="flex items-center justify-center w-full h-full text-slate-500/50 bg-slate-800/30 border border-dashed border-slate-700 rounded-lg text-sm">Пустая строка</div>';
+                        wrapper.appendChild(rowContainer);
+                        return;
+                    }
+
+                    const slideElements = [];
+                    let idxCount = 0;
+
+                    row.items.forEach((item) => {
+                        const slide = document.createElement('div');
+                        slide.className = `slideshow-slide trans-${c.transition || 'fade'} ${idxCount === 0 ? 'active' : ''}`;
+                        slide.style.display = 'flex';
+                        slide.style.alignItems = 'center';
+                        slide.style.justifyContent = 'center';
+                        
+                        const itemEl = buildItemElement(item, { ...c, imageHeight: rHeight - 50 });
+                        slide.appendChild(itemEl);
+                        
+                        rowContainer.appendChild(slide); 
+                        slideElements.push(slide);
+                        idxCount++;
+                    });
+
+                    wrapper.appendChild(rowContainer);
+
+                    if (row.items.length > 1) {
+                        let currentIndex = 0;
+                        const delayMs = (c.delay || 5) * 1000;
+                        const interval = setInterval(() => {
+                            slideElements[currentIndex].classList.remove('active');
+                            currentIndex = (currentIndex + 1) % row.items.length;
+                            slideElements[currentIndex].classList.add('active');
+                        }, delayMs);
+                        previewIntervals.push(interval);
+                    }
+                });
+                
+                if(wrapper.children.length === 0) wrapper.innerHTML = '<div class="text-slate-500 text-sm font-medium m-auto pt-20">Добавьте строки с элементами</div>';
+                container.appendChild(wrapper);
+            }
+        }
+
+        async function loadWidgetForOBS(id) {
+            const container = document.getElementById('widget-renderer');
+            try {
+                const { data, error } = await supabase.from('p_widgets').select('*').eq('id', id).single();
+                if (error || !data) throw error;
+                renderWidget(data, container);
+                
+                supabase.channel(`public:p_widgets:id=eq.${id}`)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'p_widgets', filter: `id=eq.${id}` }, payload => {
+                        renderWidget(payload.new, container);
+                    }).subscribe();
+            } catch (err) {
+                container.innerHTML = '<div style="color:red; font-size:24px; font-weight:bold; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">Ошибка: Виджет не найден</div>';
+            }
+        }
+
+        async function copyObsUrl() {
+            if(!currentWidget) return;
+            await saveWidget();
+            
+            const url = new URL(window.location.href);
+            url.searchParams.set('widgetId', currentWidget.id);
+            const tempInput = document.createElement("input");
+            tempInput.value = url.toString();
+            document.body.appendChild(tempInput);
+            tempInput.select(); document.execCommand("copy"); document.body.removeChild(tempInput);
+            
+            const container = document.getElementById('preview-container');
+            const h = container ? Math.max(600, container.scrollHeight) : 600;
+            showMessage("Скопировано!", `Настройки сохранены, а ссылка скопирована.\nРекомендуемый размер в OBS: Ширина 800, Высота ${h}.`);
+        }
+
+        function showMessage(title, text) {
+            document.getElementById('msg-title').textContent = title;
+            document.getElementById('msg-text').textContent = text;
+            const icon = document.getElementById('msg-icon');
+            icon.className = title.includes('Ошибка') ? 'fas fa-exclamation-triangle text-5xl mb-4 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]' :
+                             title.includes('Успех') || title.includes('Скопировано') ? 'fas fa-check-circle text-5xl mb-4 text-green-500 drop-shadow-[0_0_10px_rgba(34,197,94,0.5)]' :
+                             'fas fa-info-circle text-5xl mb-4 text-blue-500 drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]';
+            document.getElementById('msg-modal').classList.add('active');
+        }
+        function alertCustom(title, msg) { showMessage(title, msg); }
+    </script>
+</body>
+</html>
